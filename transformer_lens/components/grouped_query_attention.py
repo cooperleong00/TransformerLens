@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 from jaxtyping import Float
 
+from transformer_lens.hook_points import HookPoint
 from transformer_lens.components import AbstractAttention
 from transformer_lens.HookedTransformerConfig import HookedTransformerConfig
 from transformer_lens.utilities.attention import complex_attn_linear, simple_attn_linear
@@ -53,6 +54,8 @@ class GroupedQueryAttention(AbstractAttention):
         self._b_V = nn.Parameter(
             torch.zeros(cfg.n_key_value_heads, self.cfg.d_head, dtype=cfg.dtype)
         )
+
+        self.hook_repeat_v = HookPoint()
 
     @property
     def W_K(self):
@@ -175,4 +178,5 @@ class GroupedQueryAttention(AbstractAttention):
         """
         if not self.cfg.ungroup_grouped_query_attention:
             v = torch.repeat_interleave(v, dim=2, repeats=self.repeat_kv_heads)
+            self.hook_repeat_v(v)
         return super().calculate_z_scores(v, pattern)
