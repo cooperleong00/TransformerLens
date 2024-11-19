@@ -107,6 +107,7 @@ class AbstractAttention(ABC, nn.Module):
         self.hook_k = HookPoint()  # [batch, pos, head_index, d_head]
         self.hook_q = HookPoint()  # [batch, pos, head_index, d_head]
         self.hook_v = HookPoint()  # [batch, pos, head_index, d_head]
+        self.hook_concated_v = HookPoint()  # [batch, pos, head_index * d_head]
         self.hook_z = HookPoint()  # [batch, pos, head_index, d_head]
         self.hook_attn_scores = HookPoint()  # [batch, head_index, query_pos, key_pos]
         self.hook_pattern = HookPoint()  # [batch, head_index, query_pos, key_pos]
@@ -201,6 +202,8 @@ class AbstractAttention(ABC, nn.Module):
         else:
             # Not using a cache
             kv_cache_pos_offset = 0
+
+        v = self.hook_concated_v(v)
 
         if self.cfg.positional_embedding_type == "rotary":
             q = self.hook_rot_q(self.apply_rotary(q, kv_cache_pos_offset, attention_mask))
