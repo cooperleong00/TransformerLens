@@ -888,6 +888,7 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
         }
     elif "Meta-Llama-3-70B" in official_model_name:
         cfg_dict = {
@@ -907,6 +908,7 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
         }
     elif "Llama-3.2-1B" in official_model_name:
         cfg_dict = {
@@ -926,6 +928,11 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 64,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
+            "use_NTK_by_parts_rope": True,
+            "NTK_by_parts_low_freq_factor": 1.0,
+            "NTK_by_parts_high_freq_factor": 4.0,
+            "NTK_by_parts_factor": 32.0,
         }
     elif "Llama-3.2-3B" in official_model_name:
         cfg_dict = {
@@ -945,6 +952,11 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
+            "use_NTK_by_parts_rope": True,
+            "NTK_by_parts_low_freq_factor": 1.0,
+            "NTK_by_parts_high_freq_factor": 4.0,
+            "NTK_by_parts_factor": 32.0,
         }
     elif "Llama-3.1-8B" in official_model_name:
         cfg_dict = {
@@ -964,6 +976,11 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
+            "use_NTK_by_parts_rope": True,
+            "NTK_by_parts_low_freq_factor": 1.0,
+            "NTK_by_parts_high_freq_factor": 4.0,
+            "NTK_by_parts_factor": 8.0,
         }
     elif "Llama-3.1-70B" in official_model_name:
         cfg_dict = {
@@ -983,6 +1000,11 @@ def convert_hf_model_config(model_name: str, **kwargs):
             "rotary_dim": 128,
             "final_rms": True,
             "gated_mlp": True,
+            "rotary_base": 500000.0,
+            "use_NTK_by_parts_rope": True,
+            "NTK_by_parts_low_freq_factor": 1.0,
+            "NTK_by_parts_high_freq_factor": 4.0,
+            "NTK_by_parts_factor": 8.0,
         }
     elif architecture == "GPTNeoForCausalLM":
         cfg_dict = {
@@ -1489,7 +1511,7 @@ def get_pretrained_model_config(
     fold_ln: bool = False,
     device: Optional[Union[str, torch.device]] = None,
     n_devices: int = 1,
-    default_prepend_bos: bool = True,
+    default_prepend_bos: Optional[bool] = None,
     dtype: torch.dtype = torch.float32,
     first_n_layers: Optional[int] = None,
     **kwargs,
@@ -1520,11 +1542,15 @@ def get_pretrained_model_config(
         n_devices (int, optional): The number of devices to split the model across. Defaults to 1.
         default_prepend_bos (bool, optional): Default behavior of whether to prepend the BOS token when the
             methods of HookedTransformer process input text to tokenize (only when input is a string).
-            Defaults to True - even for models not explicitly trained with this, heads often use the
+            Resolution order for default_prepend_bos:
+            1. If user passes value explicitly, use that value
+            2. Model-specific default from cfg_dict if it exists (e.g. for bloom models it's False)
+            3. Global default (True)
+
+            Even for models not explicitly trained with the BOS token, heads often use the
             first position as a resting position and accordingly lose information from the first token,
-            so this empirically seems to give better results. To change the default behavior to False, pass in
-            default_prepend_bos=False. Note that you can also locally override the default behavior by passing
-            in prepend_bos=True/False when you call a method that processes the input string.
+            so this empirically seems to give better results. Note that you can also locally override the default behavior
+            by passing in prepend_bos=True/False when you call a method that processes the input string.
         dtype (torch.dtype, optional): The dtype to load the TransformerLens model in.
         kwargs: Other optional arguments passed to HuggingFace's from_pretrained.
             Also given to other HuggingFace functions when compatible.
@@ -1601,7 +1627,14 @@ def get_pretrained_model_config(
 
     cfg_dict["device"] = device
     cfg_dict["n_devices"] = n_devices
-    cfg_dict["default_prepend_bos"] = default_prepend_bos
+
+    if default_prepend_bos is not None:
+        # User explicitly set prepend_bos behavior, override config/default value
+        cfg_dict["default_prepend_bos"] = default_prepend_bos
+    elif "default_prepend_bos" not in cfg_dict:
+        # No config value or user override, set default value (True)
+        cfg_dict["default_prepend_bos"] = True
+
     if hf_cfg is not None:
         cfg_dict["load_in_4bit"] = hf_cfg.get("quantization_config", {}).get("load_in_4bit", False)
     if first_n_layers is not None:
